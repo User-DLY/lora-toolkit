@@ -210,10 +210,14 @@ DOS 风格（Windows 习惯，/ 开头也能用）：
                    help="用哪个浏览器开进度页（默认 edge）")
 
     g = p.add_argument_group("看门狗（Watchdog）")
-    g.add_argument("-wa", "--wd-vram-alloc", type=float, default=6.2,
-                   help="① torch 张量阈值 GB（默认 6.2）")
-    g.add_argument("-wf", "--wd-vram-free", type=float, default=0.25,
-                   help="① 驱动报的剩余阈值 GB（默认 0.25）")
+    g.add_argument("-wr", "--wd-vram-ratio", type=float, default=0.72,
+                   help="① torch 张量阈值系数（占总显存比例，默认 0.72；优先于 -wa）")
+    g.add_argument("-wa", "--wd-vram-alloc", type=float, default=0.0,
+                   help="① torch 张量阈值绝对值 GB（默认 0 = 用系数 -wr）")
+    g.add_argument("-fr", "--wd-vram-free-ratio", type=float, default=0.03,
+                   help="① 剩余显存阈值系数（默认 0.03；优先于 -wf）")
+    g.add_argument("-wf", "--wd-vram-free", type=float, default=0.0,
+                   help="① 剩余显存阈值绝对值 GB（默认 0 = 用系数 -fr）")
     g.add_argument("-wt", "--wd-vram-times", type=int, default=3,
                    help="① 连续触发几次才 abort（默认 3）")
     g.add_argument("-mw", "--wd-mem-warn", type=float, default=1.5,
@@ -228,8 +232,10 @@ DOS 风格（Windows 习惯，/ 开头也能用）：
                    help="④ 单步超过 N 秒算慢（默认 60）")
     g.add_argument("-st", "--wd-slow-times", type=int, default=3,
                    help="④ 连续几次慢才 abort（默认 3）")
-    g.add_argument("-vl", "--vram-limit", type=float, default=6.6,
-                   help="⑤ torch 张量硬上限 GB（默认 6.6）")
+    g.add_argument("-vr", "--vram-ratio", type=float, default=0.77,
+                   help="⑤ torch 张量硬上限系数（占总显存比例，默认 0.77；优先于 -vl）")
+    g.add_argument("-vl", "--vram-limit", type=float, default=0.0,
+                   help="⑤ torch 张量硬上限绝对值 GB（默认 0 = 用系数 -vr）")
     g.add_argument("-ma", "--mem-abort", type=float, default=93.0,
                    help="⑤ 整机内存百分比上限（默认 93）")
 
@@ -352,8 +358,11 @@ def write_config(args):
         "eval_every": args.eval_every,
         "resume": args.resume,
         "preload_adapter": args.preload_adapter,
+        "wd_vram_ratio": args.wd_vram_ratio,
         "wd_vram_alloc": args.wd_vram_alloc,
+        "wd_vram_free_ratio": args.wd_vram_free_ratio,
         "wd_vram_free": args.wd_vram_free,
+        "vram_ratio": args.vram_ratio,
         "wd_vram_times": args.wd_vram_times,
         "wd_mem_warn": args.wd_mem_warn,
         "wd_loss_max": args.wd_loss_max,
@@ -425,8 +434,9 @@ def main():
     log("  maxlen:    %d   epochs: %d   lr: %g   r/alpha: %d/%d" % (
         args.maxlen, args.epochs, args.lr, args.r, args.alpha))
     log("  恢复:      %s（最多 %d 次）" % ("开" if args.resume else "关", args.max_attempts))
-    log("  看门狗:    VRAM %.1f/%.2f GB x%d | MEM警告 %.1f GB | loss %.0fx%.1f x%d | 慢 %.0fs x%d" % (
-        args.wd_vram_alloc, args.wd_vram_free, args.wd_vram_times,
+    log("  看门狗:    VRAM 系数 %.2f / free 系数 %.2f / 硬上限 %.2f（×总显存）x%d" % (
+        args.wd_vram_ratio, args.wd_vram_free_ratio, args.vram_ratio, args.wd_vram_times))
+    log("              MEM警告 %.1f GB | loss %.0fx%.1f x%d | 慢 %.0fs x%d" % (
         args.wd_mem_warn, args.wd_loss_max, args.wd_loss_ratio, args.wd_loss_times,
         args.wd_slow_sec, args.wd_slow_times))
     log("  启动:      %s" % ("DETACHED" if args.detached else "前台"))

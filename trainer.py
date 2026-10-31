@@ -63,7 +63,8 @@ CKPT_B = os.path.join(OUT, "ckpt_b.pt")
 MAXLEN = 1536   # ★优化：1792→1536（实测显存 6.49GB 太紧，p90=1699，截断约 10% 长样本）
 CKPT_EVERY = 5   # ★v17B：50→10（47 步短训，多存点方便回退）（1362 步/3ep，68 次→27 次，IO 从 2GB 降到 810MB）
 EPOCHS = 2
-VRAM_LIMIT = 6.6   # ★R2-A 修复：实测 12 步峰值 5.28~5.79（p50 样本就 5.26），原 5.3 会第1步 abort
+VRAM_LIMIT = 0.0   # ⑤ torch 张量硬上限（GB，绝对值；0 = 用系数）
+VRAM_LIMIT_RATIO = 0.77  # ⑤ 硬上限系数（占总显存比例；优先于绝对值）
 MEM_WARN = 88.0
 MEM_ABORT = 93.0
 
@@ -71,8 +72,10 @@ MEM_ABORT = 93.0
 # ★v1.14（2026-10-31）：看门狗五路阈值全部可配（CLI --wd-*）
 #   默认值 = 实测最稳的一套
 # ══════════════════════════════════════════════════════════════
-WD_VRAM_ALLOC = 6.2      # ① torch 张量阈值（GB）
+WD_VRAM_ALLOC = 0.0      # ① torch 张量阈值（GB，绝对值；0 = 用系数）
+WD_VRAM_RATIO = 0.72     # ① torch 张量阈值（系数，占总显存比例；优先于绝对值）
 WD_VRAM_FREE = 0.25      # ① 驱动报的剩余阈值（GB）
+WD_VRAM_FREE_RATIO = 0.03  # ① 剩余阈值系数（占总显存比例；优先于绝对值）
 WD_VRAM_TIMES = 3        # ① 连续触发几次才 abort
 WD_MEM_WARN = 1.5        # ② 内存只剩 N GB 时警告（不 abort）
 WD_LOSS_MAX = 20.0       # ③ loss 绝对值阈值
@@ -138,7 +141,10 @@ try:
             PRELOAD_ADAPTER = _CFG["preload_adapter"]
         # 看门狗阈值
         if _CFG.get("wd_vram_alloc") is not None: WD_VRAM_ALLOC = float(_CFG["wd_vram_alloc"])
+        if _CFG.get("wd_vram_ratio") is not None: WD_VRAM_RATIO = float(_CFG["wd_vram_ratio"])
         if _CFG.get("wd_vram_free") is not None:  WD_VRAM_FREE = float(_CFG["wd_vram_free"])
+        if _CFG.get("wd_vram_free_ratio") is not None: WD_VRAM_FREE_RATIO = float(_CFG["wd_vram_free_ratio"])
+        if _CFG.get("vram_ratio") is not None:    VRAM_LIMIT_RATIO = float(_CFG["vram_ratio"])
         if _CFG.get("wd_vram_times") is not None: WD_VRAM_TIMES = int(_CFG["wd_vram_times"])
         if _CFG.get("wd_mem_warn") is not None:   WD_MEM_WARN = float(_CFG["wd_mem_warn"])
         if _CFG.get("wd_loss_max") is not None:   WD_LOSS_MAX = float(_CFG["wd_loss_max"])
@@ -1009,8 +1015,12 @@ for ep in range(EPOCHS):
             _alloc_gb = torch.cuda.memory_allocated() / 1e9
             _reserved_gb = torch.cuda.memory_reserved() / 1e9
 
+            # ★v0.0.2：阈值优先用系数（自动适配不同显存的卡）
+            _thr_alloc = (WD_VRAM_RATIO * _tot_gb) if WD_VRAM_RATIO > 0 else WD_VRAM_ALLOC
+            _thr_free = (WD_VRAM_FREE_RATIO * _tot_gb) if WD_VRAM_FREE_RATIO > 0 else WD_VRAM_FREE
+
             # ① VRAM 守卫（连续 3 次）
-            if _alloc_gb >= WD_VRAM_ALLOC and _free_gb < WD_VRAM_FREE:
+            if _alloc_gb >= _thr_alloc and _free_gb < _thr_free:
                 _vram_bad_cnt += 1
                 log("  [WARN-VRAM] 第 %d/3 次：torch %.2f GB + free %.2f GB（整卡 %.1fGB）" % (
                     _vram_bad_cnt, _alloc_gb, _free_gb, _tot_gb))
@@ -1056,7 +1066,8 @@ for ep in range(EPOCHS):
                     aborted = True; break
             else:
                 _slow_cnt = 0
-            if vram_peak > VRAM_LIMIT:
+            _thr_hard = (VRAM_LIMIT_RATIO * _tot_gb) if VRAM_LIMIT_RATIO > 0 else VRAM_LIMIT
+            if vram_peak > _thr_hard:
                 log("!!! torch 张量 %.2f > %.1f ABORT !!!" % (vram_peak, VRAM_LIMIT))
                 aborted = True; break
             # ★P0-1 修复：整机 MEM 百分比会被浏览器/杀毒支配（同一步报 76/76/92），
