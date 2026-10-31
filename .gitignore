@@ -1,0 +1,26 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 训练产物
+out-*/
+*.pt
+*.pkl
+*.gguf
+*.safetensors
+*.log
+*.err
+
+# 数据（体积大，不入库）
+data-*/
+run/
+run-configs/
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+.DS_Store

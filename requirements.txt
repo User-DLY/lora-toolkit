@@ -1,0 +1,8 @@
+﻿# LoRA Toolkit 依赖
+# 版本号为最低要求，实际使用建议保持最新
+
+torch>=2.1.0
+transformers>=4.40.0
+peft>=0.10.0
+accelerate>=0.30.0
+safetensors>=0.4.0
