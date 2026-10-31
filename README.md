@@ -277,3 +277,65 @@ subprocess.Popen([...], creationflags=flags, close_fds=True)
 ## 12. 许可证
 
 MIT License
+
+---
+
+## 13. 窗口控件操作（Windows UI Automation）
+
+win_ctrl.py 基于 Windows UI Automation 提供按控件名的精确操作，
+不依赖截图坐标。
+
+### 13.1 背景
+
+高 DPI 环境下，截图坐标（逻辑像素）与控件实际坐标（物理像素）存在缩放差异。
+以本机为例：
+
+| 项 | 分辨率 |
+|---|---|
+| 物理屏幕 | 2560 × 1440 |
+| 系统报告逻辑像素 | 2048 × 1152（DPI 125%） |
+| 常规截图 | 1366 × 768 |
+
+按截图坐标点击会累积偏差。UI Automation 直接返回控件包围盒（物理像素），无换算误差。
+
+### 13.2 子命令
+
+`powershell
+# 屏幕信息
+python win_ctrl.py screen
+
+# 列出所有顶层窗口
+python win_ctrl.py windows
+
+# 列出指定窗口内所有可点击控件
+python win_ctrl.py list "窗口标题片段"
+
+# 按控件名点击
+python win_ctrl.py click "窗口标题片段" "按钮名"
+
+# 按控件名输入文本
+python win_ctrl.py type "窗口标题片段" "输入框名" "要输入的文字"
+
+# 按控件名读取值
+python win_ctrl.py read "窗口标题片段" "控件名"
+
+# 搜索名称包含指定文字的控件
+python win_ctrl.py find "窗口标题片段" "关键词"
+`
+
+### 13.3 示例
+
+`powershell
+# 列出 Edge 中所有按钮
+python win_ctrl.py list "Microsoft Edge"
+
+# 点击 Edge 的刷新按钮
+python win_ctrl.py click "Microsoft Edge" "刷新"
+`
+
+### 13.4 依赖
+
+`powershell
+pip install uiautomation comtypes
+`
+
